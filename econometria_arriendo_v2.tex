@@ -1,0 +1,852 @@
+% =============================================================================
+%  Econometría del modelo de velocidad de arriendo
+%  Assetplan · Proyecto "Predicción de tiempo de arriendo"
+%
+%  Compilar con pdfLaTeX (dos pasadas para las referencias cruzadas).
+%  En Overleaf: Menu -> Compiler -> pdfLaTeX.  No requiere bibtex.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-noquoting]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\geometry{margin=2.8cm}
+
+% --- Colores sobrios para marcar la dirección de cada sesgo ------------------
+\definecolor{sesgoAbajo}{HTML}{A8452C}
+\definecolor{sesgoArriba}{HTML}{8A6410}
+\definecolor{neutro}{HTML}{1C6F55}
+\newcommand{\dn}{\textcolor{sesgoAbajo}{$\downarrow$}}
+\newcommand{\up}{\textcolor{sesgoArriba}{$\uparrow$}}
+\newcommand{\nt}{\textcolor{neutro}{$\circ$}}
+
+% --- Entornos ---------------------------------------------------------------
+\theoremstyle{definition}
+\newtheorem{resultado}{Resultado}
+\newtheorem{observacion}{Observación}
+
+% --- Atajos de notación -----------------------------------------------------
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\plim}{\operatorname*{plim}}
+\newcommand{\dd}{\,\mathrm{d}}
+
+\title{\bfseries Econometría del modelo de velocidad de arriendo\\[2pt]
+\large Especificación, derivadas e inventario de sesgos}
+\author{Proyecto \emph{Predicción de tiempo de arriendo}\\ Assetplan}
+\date{Septiembre de 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Nota metodológica del modelo de duración de vacancia de unidades de arriendo.
+Se presenta la especificación \emph{accelerated failure time} log-normal, se
+derivan explícitamente los efectos marginales sobre días y sobre la probabilidad
+publicada, y se documenta el inventario completo de sesgos: siete corregidos
+dentro del modelo y tres que quedan vivos. Los dos sesgos vivos que afectan al
+coeficiente de precio atenúan hacia cero, de modo que la estimación es
+plausiblemente una cota inferior del efecto del sobreprecio. Muestra de
+estimación: $n=3.889$ unidades en 14 cohortes mensuales, con
+$\hat{\sigma}=1{,}335$.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+% =============================================================================
+\section{Notación}
+% =============================================================================
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Símbolo & Significado \\
+\midrule
+$T$ & días desde LPA (\emph{lista para arrendar}) hasta el cierre comercial \\
+$t_i$ & tiempo observado, $\min(T_i,\ c_i)$ con $c_i$ el seguimiento disponible \\
+$d_i$ & indicador de evento: 1 si se observó el arriendo, 0 si está censurada \\
+$x_i$ & vector de atributos conocidos el día de la publicación \\
+$g_i$ & \emph{gap} de precio: $\log(\text{precio}) - \log(\text{precio esperado})$ \\
+$S(t)$ & función de supervivencia, $\Prob(T>t)$ \\
+$h(t)$ & tasa de riesgo (\emph{hazard}) \\
+$\phi,\ \Phi$ & densidad y acumulada de la normal estándar \\
+$\lambda(z)$ & razón de Mills inversa, $\phi(z)/\bigl(1-\Phi(z)\bigr)$ \\
+$\sigma$ & desviación estándar del logaritmo de la duración \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =============================================================================
+\section{El objeto de estimación: la tasa, no el promedio}
+% =============================================================================
+
+El objeto natural no es $\E[T]$ sino la \textbf{tasa de riesgo}: la velocidad
+instantánea a la que una unidad vacante se coloca, condicional a seguir vacante,
+
+\begin{equation}
+h(t\mid x)=\lim_{\Delta\to 0}
+\frac{\Prob\bigl(t\le T<t+\Delta \mid T\ge t,\ x\bigr)}{\Delta}
+=\frac{f(t\mid x)}{S(t\mid x)}
+=-\frac{\dd}{\dd t}\log S(t\mid x).
+\label{eq:hazard}
+\end{equation}
+
+Hay dos razones, ambas estructurales. La primera es que el $20{,}0\%$ de la
+muestra no tiene desenlace: al cierre de los datos seguía vacante. Un promedio
+calculado sobre las unidades que sí cerraron no estima $\E[T]$ sino
+$\E[T\mid T\le c]$, que es una cantidad distinta. La segunda es que la tasa es
+lo que la operación decide: cuánta atención asignar hoy a una unidad depende de
+la probabilidad de que se coloque en los próximos días, no del promedio
+histórico.
+
+Integrando \eqref{eq:hazard} se recupera todo lo demás,
+$S(t)=\exp\bigl(-\int_0^t h(u)\dd u\bigr)$, y la probabilidad de colocarse antes
+de un horizonte $h$ es $1-S(h)$.
+
+% =============================================================================
+\section{Especificación: AFT log-normal}
+% =============================================================================
+
+La especificación es una regresión lineal sobre el logaritmo de la duración
+---\emph{accelerated failure time}, porque los regresores aceleran o frenan el
+reloj del proceso---,
+
+\begin{equation}
+\log T_i = x_i'\beta + \sigma\varepsilon_i,
+\qquad \varepsilon_i \sim N(0,1),
+\label{eq:aft}
+\end{equation}
+
+de donde $\log T\mid x \sim N(x'\beta,\ \sigma^2)$. Las tres cantidades que el
+modelo entrega salen de una única estimación:
+
+\begin{equation}
+S(t\mid x)=1-\Phi(z),
+\qquad
+\Prob(T\le h\mid x)=\Phi\!\left(\frac{\log h-x'\beta}{\sigma}\right),
+\qquad
+z\equiv\frac{\log t-x'\beta}{\sigma}.
+\label{eq:curva}
+\end{equation}
+
+Esa es la ventaja práctica sobre un modelo binario: una regresión logística
+ajustada sobre ``¿se arrendó en 20 días?'' no contiene información sobre los 30
+días. El AFT devuelve la curva completa para cualquier horizonte sin reajustar.
+
+\begin{observacion}[Por qué log-normal y no Weibull]
+La distribución Weibull impone una tasa de riesgo monótona: siempre creciente o
+siempre decreciente. La evidencia empírica lo contradice: Gdakowicz, Putek-Szeląg
+y Bas \cite{gdakowicz2023} documentan una caída pronunciada de la tasa después de
+7--8 semanas en el mercado polaco de arriendo. La log-normal admite una tasa no
+monótona, que es la forma esperada cuando la demanda inicial se agota. Un modelo
+de riesgo en tiempo discreto con la forma base completamente libre ---\emph{spline}
+lineal por tramos en $\log(\text{semana})$, siguiendo a Deng, Gabriel y Nothaft
+\cite{deng2003}--- alcanza esencialmente el mismo error integrado: 0,195 contra
+0,196.
+\end{observacion}
+
+% =============================================================================
+\section{Efectos marginales}
+% =============================================================================
+
+Hay tres derivadas y responden preguntas distintas.
+
+\subsection{Sobre los días}
+
+Directamente de \eqref{eq:aft}, puesto que $\E[\log T\mid x]=x'\beta$:
+
+\begin{equation}
+\frac{\partial\,\E[\log T\mid x]}{\partial x_k}=\beta_k,
+\qquad
+T_{\mathrm{med}}(x)=e^{x'\beta}
+\ \Longrightarrow\
+\frac{\partial T_{\mathrm{med}}}{\partial x_k}=\beta_k\,T_{\mathrm{med}}.
+\label{eq:dias}
+\end{equation}
+
+Un coeficiente es una \textbf{semi-elasticidad}: $\beta_k=-0{,}10$ corresponde a
+aproximadamente un $10\%$ menos de días. El efecto \emph{en días} no es
+constante, sino proporcional al nivel: los mismos $-0{,}10$ equivalen a 3 días en
+una unidad que se coloca en 30 y a 9 días en una que tarda 90. Comunicar
+``ahorro de días'' sin declarar la base es engañoso.
+
+Cuando el regresor ya está en logaritmos ---como el precio--- el coeficiente es
+una \textbf{elasticidad}: variación porcentual de los días ante una variación
+porcentual del precio.
+
+\subsection{Sobre la probabilidad publicada}
+
+El entregable no son días sino $\Prob(T\le h)$. Derivando \eqref{eq:curva} por la
+regla de la cadena, con $\partial z/\partial x_k=-\beta_k/\sigma$:
+
+\begin{equation}
+\boxed{\ \frac{\partial\,\Prob(T\le h\mid x)}{\partial x_k}
+=\phi(z)\,\frac{\partial z}{\partial x_k}
+=-\,\frac{\phi(z)\,\beta_k}{\sigma}\ }
+\label{eq:dprob}
+\end{equation}
+
+\begin{resultado}[Dónde tiene efecto la palanca de precio]
+El efecto marginal no es constante: lo modula $\phi(z)$, que alcanza su máximo en
+$z=0$, es decir cuando la mediana predicha de la unidad coincide exactamente con
+el horizonte de reporte. Una rebaja de precio mueve mucho la probabilidad de
+colocar en 20 días para una unidad que el modelo estima en torno a 20 días, y
+casi nada para una unidad que el modelo estima en 5 o en 90: en los extremos
+$\phi(z)$ se aplasta.
+
+La implicación operativa es contraintuitiva: \textbf{la intervención de precio
+rinde en el centro de la distribución, no en la cola}. El decil más lento está
+tan lejos del horizonte que el precio no lo rescata; allí el problema es de otra
+naturaleza.
+\end{resultado}
+
+\subsection{Sobre la dispersión}
+
+\begin{equation}
+\frac{\partial\,\Prob(T\le h\mid x)}{\partial \sigma}
+=\phi(z)\,\frac{z}{\sigma}.
+\label{eq:dsigma}
+\end{equation}
+
+Un $\sigma$ mayor empuja todas las probabilidades hacia $1/2$ y aplana las
+diferencias entre unidades. Con $\hat{\sigma}=1{,}335$ el intervalo de una
+desviación estándar corresponde a un factor $e^{1{,}335}\approx 3{,}8$ en días.
+Ese número explica por completo que el error absoluto mediano en días sea de
+aproximadamente 20 contra una mediana de 29, y es la razón por la cual el
+entregable es una probabilidad y un decil, nunca un día puntual.
+
+% =============================================================================
+\section{Verosimilitud censurada y ecuaciones de score}
+% =============================================================================
+
+Una unidad arrendada aporta su densidad; una unidad todavía vacante aporta la
+supervivencia, es decir la información ``tardó \emph{al menos} esto'':
+
+\begin{equation}
+\ell(\beta,\sigma)=\sum_i
+d_i\bigl[\log\phi(z_i)-\log\sigma\bigr]
++(1-d_i)\log\bigl(1-\Phi(z_i)\bigr),
+\qquad z_i=\frac{\log t_i-x_i'\beta}{\sigma}.
+\label{eq:loglik}
+\end{equation}
+
+Derivando, y usando $\partial z_i/\partial\beta = -x_i/\sigma$,
+$\partial z_i/\partial\sigma = -z_i/\sigma$, junto con
+$\frac{\dd}{\dd z}\log\phi(z)=-z$ y
+$\frac{\dd}{\dd z}\log\bigl(1-\Phi(z)\bigr)=-\lambda(z)$:
+
+\begin{align}
+\frac{\partial \ell}{\partial \beta}
+&=\frac{1}{\sigma}\sum_i
+\Bigl[\,d_i\,z_i+(1-d_i)\,\lambda(z_i)\,\Bigr]x_i,
+\label{eq:scorebeta}\\[4pt]
+\frac{\partial \ell}{\partial \sigma}
+&=\frac{1}{\sigma}\sum_i
+\Bigl[\,d_i\,(z_i^{2}-1)+(1-d_i)\,z_i\,\lambda(z_i)\,\Bigr].
+\label{eq:scoresigma}
+\end{align}
+
+\begin{resultado}[Qué aporta cada observación]
+Una observación con evento contribuye su residuo estandarizado $z_i$, igual que
+en mínimos cuadrados. Una observación censurada contribuye $\lambda(z_i)$, que es
+el \textbf{residuo esperado condicional a superar el umbral observado}. La
+censura no se descarta: se imputa con la esperanza condicional que impone el
+propio modelo. Esa es toda la diferencia respecto de descartar las 780
+observaciones censuradas.
+\end{resultado}
+
+\begin{observacion}[Penalización \emph{ridge}]
+Lo que se maximiza en la práctica es $\ell(\beta,\sigma)-\lambda\|\beta_{-0}\|^2$,
+de modo que \eqref{eq:scorebeta} incorpora un término adicional $-2\lambda\beta$.
+Eso introduce sesgo hacia cero de manera deliberada, a cambio de varianza. Con 43
+parámetros y aproximadamente 945 eventos el número de eventos por parámetro es
+22, holgado según los criterios habituales; el \emph{shrinkage} responde a la
+dispersión del diseño ---edificios con pocas unidades--- más que a escasez de
+muestra. Sigue la recomendación de van Smeden \emph{et al.} \cite{vansmeden2019}.
+\end{observacion}
+
+% =============================================================================
+\section{Sesgo I: censura}
+% =============================================================================
+
+Es el sesgo de mayor magnitud y el modelo lo corrige. Supóngase el procedimiento
+intuitivo: regresión por mínimos cuadrados de $\log T$ sobre las unidades ya
+arrendadas. Eso estima $\E[\log T\mid x,\ T\le c]$. Para una normal truncada por
+arriba, con $a\equiv(\log c-x'\beta)/\sigma$ y usando
+$\E[Z\mid Z\le a]=-\phi(a)/\Phi(a)$ para $Z\sim N(0,1)$:
+
+\begin{equation}
+\E\bigl[\log T \mid x,\ T\le c\bigr]
+= x'\beta-\sigma\,\frac{\phi(a)}{\Phi(a)}.
+\label{eq:truncada}
+\end{equation}
+
+El término omitido, $-\sigma\phi(a)/\Phi(a)$, es siempre negativo: el estimador
+ingenuo \textbf{siempre predice más rápido de lo real}. Pero lo grave no es el
+signo sino que $a$ depende de $x'\beta$. El término omitido está correlacionado
+con los regresores, de modo que no es un desplazamiento del intercepto que pueda
+ignorarse: \textbf{sesga todo el vector $\beta$}.
+
+El problema se agrava justamente donde más importa. Cuanto más corto el
+seguimiento ---las cohortes recientes--- menor es $a$, mayor $\phi(a)/\Phi(a)$ y
+más fuerte el sesgo. En la cohorte 2026-08 la censura alcanzó el $73{,}9\%$.
+
+\begin{resultado}[Magnitud medida]
+Mediana de días predicha por el AFT censurado: $47{,}6$. Por mínimos cuadrados
+descartando las censuradas: $23{,}2$. El sesgo es de $-24{,}4$ días, más de la
+mitad del valor estimado.
+\end{resultado}
+
+% =============================================================================
+\section{Sesgo II: riesgo competitivo}
+% =============================================================================
+
+El $18{,}2\%$ de las unidades no se arrienda: se da de baja. Eso \textbf{no es
+censura}: no es ``todavía no se sabe'', es un desenlace observado y definitivo.
+Existen dos causas con tasas específicas $h_1$ (arriendo) y $h_2$ (baja), y la
+supervivencia depende de ambas:
+
+\begin{equation}
+S(t)=\exp\!\left(-\int_0^t\bigl[h_1(u)+h_2(u)\bigr]\dd u\right),
+\qquad
+F_1(t)=\int_0^t S(u^-)\,h_1(u)\dd u.
+\label{eq:cif}
+\end{equation}
+
+$F_1$ es la \textbf{incidencia acumulada}: la probabilidad de que la unidad se
+arriende antes de $t$ en el mundo real, donde puede darse de baja antes. Si en
+cambio se trata la baja como censura y se calcula
+$1-\exp(-\int_0^t h_1)$, se está estimando la probabilidad de arriendo en un
+mundo contrafactual sin bajas. La desigualdad tiene una sola dirección:
+
+\begin{equation}
+1-\exp\!\left(-\int_0^t h_1(u)\dd u\right)
+\ \ge\
+\int_0^t S(u^-)h_1(u)\dd u
+\ =\ F_1(t),
+\label{eq:desigualdad}
+\end{equation}
+
+cuya demostración es inmediata: $\exp\bigl(-\int(h_1+h_2)\bigr)\le
+\exp\bigl(-\int h_1\bigr)$ porque $h_2\ge 0$. Tratar la baja como censura
+\textbf{siempre sobreestima} la probabilidad de arriendo. La formulación de
+referencia para regresión sobre la incidencia acumulada es Fine y Gray
+\cite{finegray1999}.
+
+\begin{observacion}[Dónde muerde]
+A 20 días la masa de bajas es pequeña: $\Prob(\text{arrendada})=0{,}263$ frente a
+$\Prob(\text{baja})=0{,}024$. Pero la baja no está repartida uniformemente: se
+concentra en los segmentos lentos, con un $43\%$ de censura en comunas como
+Cerrillos y San Joaquín. El sesgo es mayor exactamente donde el modelo debe
+advertir un problema.
+\end{observacion}
+
+% =============================================================================
+\section{El precio de referencia y sus dos sesgos}
+% =============================================================================
+
+El precio en nivel no sirve: entre deciles extremos, las unidades caras se
+colocan $10{,}9$ días \emph{más rápido}, porque las comunas caras son las
+líquidas. El precio solo informa relativo a lo que la unidad debería costar. De
+ahí la estructura en dos etapas, que sigue a Andersson \cite{andersson2025}:
+
+\begin{align}
+\text{(i)}\quad & \log P_i = w_i'\gamma + u_i, \label{eq:etapa1}\\
+\text{(ii)}\quad & \log T_i = \alpha\,\hat{u}_i + x_i'\beta + \sigma\varepsilon_i.
+\label{eq:etapa2}
+\end{align}
+
+La primera etapa es un modelo hedónico del precio; el residuo $\hat{u}$ es el
+\emph{gap}. Por construcción $\hat{u}$ es ortogonal a $w$ en la muestra de
+ajuste: es \textbf{la componente del precio que los atributos no explican}, es
+decir la parte discrecional de la decisión de \emph{pricing}. La justificación
+teórica del canal es la búsqueda competitiva de Díaz y Jerez \cite{diazjerez2010}:
+publicando precios más bajos, el vendedor atrae más visitas y coloca más rápido.
+
+\subsection{Regresor generado}
+
+$\hat{u}$ no se observa, se estima. Eso rompe dos cosas distintas, y conviene no
+confundirlas porque tienen remedios distintos.
+
+\paragraph{(a) Inferencia.} Los errores estándar de la segunda etapa están
+subestimados porque ignoran la incertidumbre de $\hat{\gamma}$: es el problema de
+Pagan \cite{pagan1984}. La corrección es aplicar \emph{bootstrap} al procedimiento
+completo ---reestimando \eqref{eq:etapa1} dentro de cada réplica--- o la corrección
+analítica de Murphy y Topel \cite{murphytopel1985}. Es lo que hacen Allen,
+Rutherford y Thomson \cite{allen2009} sobre 20.131 arriendos de Dallas con esta
+misma especificación en dos etapas.
+
+\paragraph{(b) Sesgo.} Si $\hat{u}=u-\xi$ con $\xi=\log\hat{P}-\log P^{*}$ el error
+de estimación de la primera etapa, se trata de error de medición clásico en el
+regresor y
+
+\begin{equation}
+\plim\ \hat{\alpha}
+=\alpha\cdot\underbrace{\frac{\Var(u)}{\Var(u)+\Var(\xi)}}_{\textstyle\lambda}\ <\ \alpha .
+\label{eq:atenuacion}
+\end{equation}
+
+Atenuación hacia cero: cuanto peor el modelo de precio, más se diluye el efecto
+estimado del \emph{gap}. $\lambda$ es la \emph{razón de confiabilidad}
+\cite{fuller1987}.
+
+\begin{observacion}[El \emph{bootstrap} no corrige (b)]
+Un \emph{bootstrap} reproduce en cada réplica el sesgo que tenga el estimador. Si
+$\hat{\alpha}$ está atenuado, las $B$ réplicas están atenuadas y el resultado es un
+intervalo angosto alrededor del número equivocado: precisión sobre algo sesgado. El
+resultado de Pagan es sobre la \textbf{varianza}, no sobre el punto. Allen et al.
+tampoco corrigen la atenuación.
+\end{observacion}
+
+\subsection{Identificación de $\Var(\xi)$ y corrección de la atenuación}
+
+Para aplicar \eqref{eq:atenuacion} hace falta $\Var(\xi)$, y el obstáculo es que
+\textbf{no se identifica con el residuo del hedónico}: ese residuo \emph{es}
+$\hat{u}$, y bajo $\xi\perp u$ ya trae las dos varianzas sumadas,
+
+\begin{equation}
+\Var(\hat{u})=\Var(u)+\Var(\xi).
+\label{eq:varsuma}
+\end{equation}
+
+Hace falta una fuente de variación que mueva $\hat{P}$ dejando $P^{*}$ fijo. El
+propio \emph{bootstrap} de (a) la provee. Para una unidad \textbf{fija} $i$, se
+recalcula el \emph{gap} en cada réplica con el hedónico reajustado sobre la
+remuestra. Como $u_i$ no cambia entre réplicas,
+
+\begin{equation}
+\hat{u}_i^{(b)}-\hat{u}_i
+=-\bigl(\log\hat{P}^{(b)}(w_i)-\log\hat{P}(w_i)\bigr),
+\label{eq:gapreplica}
+\end{equation}
+
+de modo que la dispersión entre réplicas aísla exactamente la variabilidad de la
+primera etapa y
+
+\begin{equation}
+\widehat{\Var}(\xi)=\frac{1}{n}\sum_{i=1}^{n}\Var_b\!\left(\hat{u}_i^{(b)}\right),
+\qquad
+\hat{\lambda}=1-\frac{\widehat{\Var}(\xi)}{\Var(\hat{u})},
+\qquad
+\hat{\alpha}_{\text{corr}}=\frac{\hat{\alpha}}{\hat{\lambda}} .
+\label{eq:lambda}
+\end{equation}
+
+El mismo factor $1/\hat{\lambda}$ se aplica a los extremos del intervalo. Es una
+corrección de primer orden: trata $\hat{\lambda}$ como conocido e ignora su propia
+varianza de muestreo, lo que subestima levemente la amplitud del intervalo
+corregido.
+
+\begin{resultado}[Qué corrige y qué no]
+$\hat{\alpha}/\hat{\lambda}$ sigue siendo una \textbf{cota inferior}, por dos razones
+independientes:
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+\item El \emph{bootstrap} mide el error de \textbf{estimación} de $\hat{P}$, no el de
+\textbf{especificación}. Si el hedónico está mal especificado, $\hat{P}$ es sesgado
+para $P^{*}$ y esa componente de $\xi$ no aparece en la dispersión entre réplicas
+---es común a todas ellas---. Luego $\widehat{\Var}(\xi)$ es una subestimación,
+$\hat{\lambda}$ una sobrestimación, y la corrección se queda corta.
+\item Corrige la atenuación por medición, no la endogeneidad de la sección
+siguiente, que empuja en la misma dirección.
+\end{enumerate}
+\end{resultado}
+
+Una alternativa sin este límite es SIMEX \cite{cookstefanski1994}: se inyecta ruido
+adicional de varianza conocida $\theta\,\widehat{\Var}(\xi)$ para $\theta=0{,}5,1,1{,}5,2$,
+se observa cómo decae $\hat{\alpha}(\theta)$ y se extrapola a $\theta=-1$. Es más
+robusto a la forma funcional del decaimiento, y también más caro: multiplica por
+cinco el número de ajustes.
+
+\subsection{Endogeneidad: el sesgo que no se corrige}
+
+La ecuación estructural es $\log T=\alpha g+x'\beta+\nu$, donde $\nu$ contiene
+todo lo que hace deseable a una unidad y no se observa: orientación, vista, luz,
+estado de las terminaciones. Pero \textbf{quien fija el precio sí observa parte
+de $\nu$}. La regla de \emph{pricing} es $g=f(x,\nu,\eta)$, y en consecuencia
+
+\begin{equation}
+\plim\ \hat{\alpha}=\alpha+\frac{\Cov(g,\nu)}{\Var(g\mid x)} .
+\label{eq:endogeneidad}
+\end{equation}
+
+El signo del segundo término admite un argumento. Dos historias plausibles, y
+ambas apuntan en la misma dirección:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+\item La unidad es mejor de lo que registran los datos ($\nu$ bajo, se coloca
+rápido) y quien fija el precio lo advierte y cobra más ($g$ alto)
+$\Rightarrow \Cov(g,\nu)<0$.
+\item La unidad es peor de lo que registran los datos ($\nu$ alto, lenta) y se le
+asigna un precio de castigo ($g$ bajo) $\Rightarrow \Cov(g,\nu)<0$ también.
+\end{itemize}
+
+\begin{resultado}[Dirección del sesgo de endogeneidad]
+Con $\Cov(g,\nu)<0$ y $\alpha>0$, la estimación \textbf{subestima} el efecto del
+sobreprecio. Sumado a la atenuación de \eqref{eq:atenuacion}, que opera en la
+misma dirección, $\hat{\alpha}$ es plausiblemente una \textbf{cota inferior} del
+daño real de publicar caro.
+
+Es un argumento de signo, no una demostración: descansa en que la regla de
+\emph{pricing} no asigne precios altos a unidades sistemáticamente peores. Pero
+es la dirección conservadora, lo que significa que el modelo no exagera el efecto
+del precio.
+\end{resultado}
+
+Corregirlo exigiría variación exógena de precios: un experimento, o un cambio de
+política que haya movido precios por razones ajenas a la unidad. Es el problema
+que formaliza Stein \cite{stein1995}: el precio de lista es una elección
+estratégica del vendedor, no un tratamiento asignado. \textbf{Reducir el precio de
+una unidad no produce mecánicamente el cambio de velocidad que sugiere el
+coeficiente.}
+
+\begin{observacion}[Causalidad inversa dentro de la ventana]
+El $37{,}3\%$ de las unidades tuvo una rebaja durante la vacancia, y esas tardan
+53 días de mediana frente a 24. Eso \emph{no} es evidencia de que rebajar no
+sirva: se rebaja \emph{porque} no se arrienda. El \emph{gap} se mide con el precio
+del día 0 precisamente para evitar esta contaminación, pero la protección es
+parcial: si el precio inicial ya anticipaba un problema, la contaminación entra
+igualmente.
+\end{observacion}
+
+% =============================================================================
+\section{Sesgo IV: codificación del efecto de edificio}
+% =============================================================================
+
+Hay 796 edificios y 3.889 unidades: como variables indicadoras es inviable. Se
+utiliza la media del objetivo por edificio, encogida hacia la media global ---un
+estimador de Bayes empírico---:
+
+\begin{equation}
+\mathrm{TE}_j=\frac{n_j\,\bar{y}_j+m\,\bar{y}}{n_j+m}
+\qquad\Longrightarrow\qquad
+\E[\mathrm{TE}_j]-\theta_j=\frac{m}{n_j+m}\,(\bar{y}-\theta_j).
+\label{eq:te}
+\end{equation}
+
+Sesgo deliberado hacia la media global, que se desvanece a medida que $n_j$
+crece, a cambio de reducir la varianza por un factor $\bigl(n_j/(n_j+m)\bigr)^2$.
+El $m$ óptimo en error cuadrático medio es aproximadamente el cociente entre la
+varianza intra-edificio y la varianza entre edificios; en la implementación está
+fijado en 20.
+
+\begin{observacion}[El sesgo peligroso es el otro]
+Si el código del edificio $j$ se calcula empleando el $y_i$ de la propia
+observación $i$, el regresor queda correlacionado con el error por construcción y
+el ajuste dentro de muestra se infla de manera espectacular. Es la forma más
+común de inflar artificialmente un AUC. La codificación se calcula fuera de
+pliegue ---cinco particiones internas dentro del conjunto de entrenamiento---
+precisamente por esto. Nótese además que para un edificio nuevo sin historial el
+código colapsa al valor previo global: el modelo pierde su variable más fuerte
+exactamente donde más se la querría.
+\end{observacion}
+
+% =============================================================================
+\section{Sesgo V: el esquema de validación}
+% =============================================================================
+
+La validación cruzada aleatoria estima el error esperado bajo el supuesto de que
+las observaciones son extracciones independientes de una distribución fija. Aquí
+ese supuesto falla por dos vías simultáneas.
+
+\textbf{Correlación intra-edificio.} Dos unidades de la misma torre comparten
+ubicación, administración y política de precio. El tamaño de muestra efectivo se
+aproxima al número de edificios más que al de unidades, y con partición aleatoria
+el mismo edificio aparece en entrenamiento y en prueba.
+
+\textbf{No estacionariedad.} La distribución conjunta se desplaza entre cohortes:
+las visitas de la primera semana oscilan entre 4,7 y 13,3 según el mes.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lcl@{}}
+\toprule
+Esquema & AUC@20 & Supuesto que emplea \\
+\midrule
+Validación cruzada aleatoria & 0,767 & observaciones i.i.d.: falso por ambas vías \\
+\emph{GroupKFold} por edificio & 0,731 & corrige el conglomerado, no la deriva \\
+\textbf{\emph{Forward} por cohorte} & \textbf{0,705} & reproduce el uso real: pasado $\to$ mes siguiente \\
+\bottomrule
+\end{tabular}
+\caption{Efecto del esquema de validación sobre el desempeño estimado.}
+\end{table}
+
+La descomposición es limpia: $0{,}036$ de fuga por conglomerado y $0{,}026$ de
+deriva temporal. Los $0{,}062$ conjuntos son el margen por el cual un proyecto
+validado con partición aleatoria promete un desempeño que no obtendrá.
+
+% =============================================================================
+\section{Calibración}
+% =============================================================================
+
+La regresión de calibración de Cox contrasta el \emph{nivel} de la probabilidad,
+no su orden:
+
+\begin{equation}
+\operatorname{logit}\Prob(Y=1\mid \hat{p})=a+b\cdot\operatorname{logit}(\hat{p}).
+\label{eq:calib}
+\end{equation}
+
+Con $b=1$ y $a=0$ la probabilidad significa lo que declara. Un $b<1$ indica
+predicciones sobredispersas: los extremos exageran. Las pendientes medidas fueron
+$0{,}487$ para la logística, $0{,}717$ para el AFT y $0{,}725$ para el modelo de
+riesgos competitivos; la primera lo suficientemente baja como para que sus
+probabilidades no sean publicables.
+
+El escalamiento de Platt \cite{platt1999} lo corrige reajustando $a$ y $b$, y esa
+corrección \textbf{también se estima hacia adelante}: sobre las cohortes
+anteriores, aplicada a la siguiente. Ajustarla sobre las mismas predicciones que
+después se evalúan produce una pendiente de $1{,}000$ por construcción y carece
+de contenido.
+
+\begin{observacion}[Dos verificaciones]
+La transformación es monótona, de modo que el AUC \emph{dentro} de una cohorte no
+puede cambiar; ésa es la comprobación de que la implementación es correcta. Y si
+la pendiente estimada resulta negativa, el mapeo invierte el orden y el
+\emph{score} recalibrado queda peor que el original: en ese caso la cohorte se
+deja sin recalibrar.
+\end{observacion}
+
+% =============================================================================
+\section{El techo estocástico}
+% =============================================================================
+
+Parte del error no es eliminable con ninguna variable adicional, porque el
+desenlace \emph{es} un tiempo de espera aleatorio. Para el error cuadrático de la
+probabilidad la descomposición es exacta, con $\pi$ la probabilidad verdadera:
+
+\begin{equation}
+\E\bigl[(Y-\hat{p})^2\bigr]
+=\underbrace{\E\bigl[\pi(1-\pi)\bigr]}_{\text{irreducible}}
++\underbrace{\E\bigl[(\pi-\hat{p})^2\bigr]}_{\text{error del modelo}} .
+\label{eq:brier}
+\end{equation}
+
+Para el ordenamiento el resultado es igual de nítido. Consideremos dos unidades
+con medias $\mu_1$ y $\mu_2$, cada una con su propio choque log-normal:
+
+\begin{equation}
+\Prob(T_1<T_2\mid \mu_1,\mu_2)
+=\Prob\bigl(\sigma(\varepsilon_1-\varepsilon_2)<\mu_2-\mu_1\bigr)
+=\Phi\!\left(\frac{\mu_2-\mu_1}{\sigma\sqrt{2}}\right).
+\label{eq:concordancia}
+\end{equation}
+
+\begin{resultado}[Lo que implica \eqref{eq:concordancia}]
+La concordancia máxima alcanzable depende \textbf{únicamente del cociente entre la
+dispersión de las medias predichas y $\sigma$}. No del algoritmo empleado ni del
+tamaño de muestra. Si $\sigma$ es grande respecto de cuánto se separan las
+unidades entre sí, ni un modelo perfecto ordena bien.
+\end{resultado}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Métrica & Observado & Techo & \% capturado \\
+\midrule
+Índice de concordancia & 0,685 & 0,713 & 87\% \\
+AUC@20 & 0,725 & 0,763 & 86\% \\
+\bottomrule
+\end{tabular}
+\caption{Desempeño observado frente al máximo alcanzable, estimado por simulación
+desde el propio modelo ajustado.}
+\end{table}
+
+La simulación de sensibilidad lo confirma: con $\sigma$ reducido a la mitad el
+techo del índice de concordancia subiría a $0{,}811$. El límite lo impone el ruido
+del proceso, no el algoritmo. Andersson \cite{andersson2025} realiza el mismo
+cálculo con 20.000 unidades en Japón y obtiene un techo de aproximadamente 0,66
+frente a un índice logrado de 0,63. El índice utilizado es el de Harrell
+\emph{et al.} \cite{harrell1982}, en la variante consistente bajo censura de Uno
+\emph{et al.} \cite{uno2011}.
+
+\begin{observacion}[Qué no dice este techo]
+Se calcula bajo el supuesto de que el modelo está correctamente especificado, es
+decir que las $\hat{p}$ son las verdaderas. Si faltan variables, las
+probabilidades verdaderas se separan más entre unidades y \textbf{el techo real es
+más alto}. La conclusión correcta no es ``no se puede predecir mejor'' sino ``no
+se puede predecir mejor \emph{con esta información}''.
+\end{observacion}
+
+% =============================================================================
+\section{Inventario de sesgos}
+% =============================================================================
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}p{4.6cm}cp{2.4cm}p{5.4cm}@{}}
+\toprule
+Sesgo & Dir. & Magnitud & Estado \\
+\midrule
+Censura & \dn & $-24{,}4$ días & corregido: verosimilitud \eqref{eq:loglik} \\
+Riesgo competitivo & \up & 0,024 a 20 d & corregido: incidencia acumulada \eqref{eq:cif} \\
+Fuga en la codificación & \up & --- & corregido: codificación fuera de pliegue \\
+Validación aleatoria & \up & $+0{,}062$ & corregido: \emph{forward} por cohorte \\
+Sesgo de longitud & \up & 73,9\% censura & corregido: se excluyen cohortes con observabilidad $<0{,}90$ \\
+Descalibración & \up & $b=0{,}717$ & corregido: Platt hacia adelante \eqref{eq:calib} \\
+\emph{Shrinkage ridge} & \dn & EPV $=22$ & deliberado: se acepta por varianza \\
+\addlinespace
+Reg.\ generado: inferencia & --- & $\mathrm{se}_{\text{comp}}/\mathrm{se}_{\text{ing}}$ & corregido: \emph{bootstrap} de ambas etapas \\
+Reg.\ generado: atenuación & \dn & $\hat{\lambda}$, ec.\ \eqref{eq:lambda} & \textbf{parcial}: $\hat{\alpha}/\hat{\lambda}$ sigue siendo cota inferior \\
+Endogeneidad del precio & \dn & --- & \textbf{vivo}: requiere variación exógena \\
+Selección de muestra & \nt & 91\% de las LPA & \textbf{vivo}: se declara, no se corrige \\
+\bottomrule
+\end{tabular}
+\caption{Inventario de sesgos. \dn\ atenúa o subestima; \up\ infla o sobreestima;
+\nt\ afecta validez externa, no interna.}
+\end{table}
+
+Los ocho primeros están incorporados al modelo. La atenuación por regresor
+generado está corregida solo en parte: \eqref{eq:lambda} recupera la componente
+atribuible al error de estimación de la primera etapa, no la que viene de su
+especificación. Los dos últimos no son corregibles con métodos estadísticos sobre
+estos datos, y por lo tanto deben declararse en cualquier informe que utilice estos
+números.
+
+Los sesgos que siguen afectando al coeficiente de precio ---la atenuación
+residual y la endogeneidad--- \textbf{operan ambos hacia cero}. Ese es el hallazgo más tranquilizador del inventario: el modelo no
+exagera el efecto del precio, lo subestima. El resultado de la ablación
+---eliminar el \emph{gap} cuesta $0{,}052$ de AUC--- es entonces un piso y no un
+techo.
+
+El sesgo de selección es de otra naturaleza: no deforma nada dentro de la muestra,
+define a quién aplica el modelo. Cubre unidades que alcanzan el estado ``lista
+para arrendar'' con historial de precio. Quedan fuera las 1.733 unidades que
+alcanzaron el estado ``arrendado'' sin pasar nunca por publicación ---ingresaron
+ya ocupadas o fueron asignadas directamente--- y aproximadamente el $9\%$ sin
+historial de precio.
+
+% =============================================================================
+\section{Síntesis}
+% =============================================================================
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=5pt]
+\item \textbf{El modelo estima una tasa, no un promedio}, porque una de cada cinco
+unidades carece de desenlace y descartarlas sesga la predicción en 24 días.
+
+\item \textbf{Un coeficiente es una semi-elasticidad sobre los días}, y su efecto
+sobre la probabilidad publicada es máximo cuando la mediana predicha de la unidad
+coincide con el horizonte, según \eqref{eq:dprob}. La palanca de precio rinde en
+el centro de la distribución, no en la cola.
+
+\item \textbf{El efecto del precio está subestimado, no exagerado}, porque los
+sesgos que permanecen atenúan hacia cero. El \emph{bootstrap} de dos etapas corrige
+la inferencia y \eqref{eq:lambda} recupera parte de la atenuación, pero ni uno ni
+otro tocan la endogeneidad. Sigue siendo, por tanto, una asociación: para afirmar
+que rebajar acelera se requiere variación exógena que estos datos no contienen.
+\end{enumerate}
+
+% =============================================================================
+\begin{thebibliography}{99}
+
+\bibitem{andersson2025}
+Andersson, P. (2025).
+\emph{Predicting the vacancy duration of Japanese rental apartments}.
+Proceedings of the 39th Annual Conference of the Japanese Society for Artificial
+Intelligence, 2O4-OS-21a-03.
+
+\bibitem{deng2003}
+Deng, Y., Gabriel, S.\ A.\ y Nothaft, F.\ E. (2003).
+Duration of residence in the rental housing market.
+\emph{Journal of Real Estate Finance and Economics}, 26(2/3), 267--285.
+
+\bibitem{diazjerez2010}
+Díaz, A.\ y Jerez, B. (2010).
+\emph{House prices, sales and time on the market: a search-theoretic framework}.
+Universidad Carlos III de Madrid, Working Paper Economic Series 10-33.
+
+\bibitem{finegray1999}
+Fine, J.\ P.\ y Gray, R.\ J. (1999).
+A proportional hazards model for the subdistribution of a competing risk.
+\emph{Journal of the American Statistical Association}, 94(446), 496--509.
+
+\bibitem{allen2009}
+Allen, M.\ T., Rutherford, R.\ C.\ y Thomson, T.\ A. (2009).
+Residential asking rents and time on the market.
+\emph{Journal of Real Estate Finance and Economics}, 38(4), 351--365.
+
+\bibitem{cookstefanski1994}
+Cook, J.\ R.\ y Stefanski, L.\ A. (1994).
+Simulation-extrapolation estimation in parametric measurement error models.
+\emph{Journal of the American Statistical Association}, 89(428), 1314--1328.
+
+\bibitem{fuller1987}
+Fuller, W.\ A. (1987).
+\emph{Measurement Error Models}. Wiley, Nueva York.
+
+\bibitem{gdakowicz2023}
+Gdakowicz, A., Putek-Szeląg, E.\ y Bas, M. (2023).
+Duration of the rental offer for residential property.
+\emph{Real Estate Management and Valuation}, 31(2), 82--91.
+
+\bibitem{gdakowicz2025}
+Gdakowicz, A.\ y Putek-Szeląg, E. (2025).
+The impact of selected attributes of new residential properties on the timing of
+their sale.
+\emph{Real Estate Management and Valuation}, 33(3), 60--74.
+
+\bibitem{hanhausman1990}
+Han, A.\ y Hausman, J.\ A. (1990).
+Flexible parametric estimation of duration and competing risk models.
+\emph{Journal of Applied Econometrics}, 5(1), 1--28.
+
+\bibitem{harrell1982}
+Harrell, F.\ E., Califf, R.\ M., Pryor, D.\ B., Lee, K.\ L.\ y Rosati, R.\ A. (1982).
+Evaluating the yield of medical tests.
+\emph{JAMA}, 247(18), 2543--2546.
+
+\bibitem{murphytopel1985}
+Murphy, K.\ M.\ y Topel, R.\ H. (1985).
+Estimation and inference in two-step econometric models.
+\emph{Journal of Business \& Economic Statistics}, 3(4), 370--379.
+
+\bibitem{pagan1984}
+Pagan, A. (1984).
+Econometric issues in the analysis of regressions with generated regressors.
+\emph{International Economic Review}, 25(1), 221--247.
+
+\bibitem{platt1999}
+Platt, J. (1999).
+Probabilistic outputs for support vector machines and comparisons to regularized
+likelihood methods. En \emph{Advances in Large Margin Classifiers}, MIT Press.
+
+\bibitem{stein1995}
+Stein, J.\ C. (1995).
+Prices and trading volume in the housing market: a model with downpayment effects.
+\emph{Quarterly Journal of Economics}, 110(2), 379--406.
+(Versión previa: NBER Working Paper 4373, 1993.)
+
+\bibitem{uno2011}
+Uno, H., Cai, T., Pencina, M.\ J., D'Agostino, R.\ B.\ y Wei, L.-J. (2011).
+On the C-statistics for evaluating overall adequacy of risk prediction procedures
+with censored survival data.
+\emph{Statistics in Medicine}, 30(10), 1105--1117.
+
+\bibitem{vansmeden2019}
+van Smeden, M., Moons, K.\ G.\ M., de Groot, J.\ A.\ H., Collins, G.\ S.,
+Altman, D.\ G., Eijkemans, M.\ J.\ C.\ y Reitsma, J.\ B. (2019).
+Sample size for binary logistic prediction models: beyond events per variable
+criteria.
+\emph{Statistical Methods in Medical Research}, 28(8), 2455--2474.
+
+\end{thebibliography}
+
+\end{document}
